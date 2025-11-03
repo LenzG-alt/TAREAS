@@ -415,7 +415,7 @@ WHERE transaccion_id ='TXN-20250928-143022';
 -- Escenario: Intentar transferir $10,000 de LIMA-002 (saldo: $3,000) a AQP-001 
 
 -- Generar nuevo ID
-SELECT 'TXN-' || to_char(now(),'YYYYMMDD-HH24MISS') AS transaccion_id: 
+SELECT 'TXN-' || to_char(now(),'YYYYMMDD-HH24MISS') AS transaccion_id;
 -- ejemplo: TXN-20250928-144500
 
 -- Terminal 1 (Lima): 
