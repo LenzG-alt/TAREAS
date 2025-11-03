@@ -122,11 +122,11 @@ CREATE TABLE control_2pc (
 
 -- Datos iniciales 
 INSERT INTO cuentas (numero_cuenta, titular, saldo) VALUES 
-('CUSC0-001', 'Rosa Quispe Huamán', 2000.00), 
-('Cusco-002', 'Pedro Mamani Condori', 4500.00), 
-('CUSC0-003', 'Carmen Ccoa Flores', 1800.00), 
-('CUSC0-004', 'Luis Apaza Choque', 5300.00), 
-('CUSC0-005', 'Elena Puma Quispe', 3700.00); 
+('CUSCO-001', 'Rosa Quispe Huamán', 2000.00), 
+('CUSCO-002', 'Pedro Mamani Condori', 4500.00), 
+('CUSCO-003', 'Carmen Ccoa Flores', 1800.00), 
+('CUSCO-004', 'Luis Apaza Choque', 5300.00), 
+('CUSCO-005', 'Elena Puma Quispe', 3700.00); 
 
 SELECT * FROM cuentas;
 
