@@ -208,7 +208,7 @@ INSERT INTO control_2pc (transaccion_id, estado_global, coordinador)
 VALUES ('TXN-20250928-143022', 'INICIADA', 'LIMA'); 
 
 -- Mostrar estado
-SELECT * FROM control_2pc WHERE transaccion_id = *'TXN-20250928-143022'; 
+SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20250928-143022'; 
 
 -- Terminal 2 (Cusco): 
 BEGIN; 
@@ -259,7 +259,7 @@ SET votos_commit = votos_commit + 1,
 WHERE transaccion_id = 'TXN-20250928-143022';
 
 -- Verificar estado 
-SELECT + FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-143022'; 
+SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-143022'; 
 SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20250928-143022'; 
 
 -- IMPORTANTE: NO HACER COMMIT NI ROLLBACK AÚN 
