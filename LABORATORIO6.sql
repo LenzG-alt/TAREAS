@@ -520,9 +520,9 @@ SELECT dblink_connect('conn_cusco',
 -- Ahora ejecutar deadlockreal: 
 -- Terminal 1: 
  
-BEGIN: 
+BEGIN;
 -- Bloquear local 
-SELECT * FROM cuentas WHERE numero_cuenta - 'LIMA-003' FOR UPDATE; 
+SELECT * FROM cuentas WHERE numero_cuenta = 'LIMA-003' FOR UPDATE; 
 
 -- Esperar 5 segundos 
 SELECT pg_sleep(5);
@@ -541,7 +541,7 @@ CREATE EXTENSION IF NOT EXISTS dblink;
 
 SELECT dblink_connect('conn_lima', 
 	'host=localhost dbname=banco_lima user=estudiante password=lab2024'); 
-BEGIN
+BEGIN;
 
 -- Bloquear local
 SELECT * FROM cuentas WHERE numero_cuenta - 'LIMA-003' FOR UPDATE; 
