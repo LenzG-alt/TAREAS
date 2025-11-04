@@ -732,7 +732,7 @@ BEGIN
 		timestamp_decision = CURRENT_TIMESTAMP 
 	WHERE transaccion_id = p_transaccion_id; 
 	
-	RAISE NOTICE 'Transacción % confirmada exitosamente', p_transaccion_i 
+	RAISE NOTICE 'Transacción % confirmada exitosamente', p_transaccion_id;
 END; 
 $$ LANGUAGE plpgsql; 
 
