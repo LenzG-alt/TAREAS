@@ -439,7 +439,7 @@ INSERT INTO transacciones_log
 SELECT 
 	'TXN-20250928-144500', 
 	id, 
-	"DEBITO", 
+	'DEBITO', 
 	10000.00, 
 	'PENDING', 
 	'Transferencia a AQP-061 - SALDO INSUFICIENTE' 
