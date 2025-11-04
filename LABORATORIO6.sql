@@ -544,7 +544,7 @@ SELECT dblink_connect('conn_lima',
 BEGIN;
 
 -- Bloquear local
-SELECT * FROM cuentas WHERE numero_cuenta - 'LIMA-003' FOR UPDATE; 
+SELECT * FROM cuentas WHERE numero_cuenta = 'LIMA-003' FOR UPDATE; 
 
 -- Esperar 2 segundos 
 SELECT pg_sleep(2);
