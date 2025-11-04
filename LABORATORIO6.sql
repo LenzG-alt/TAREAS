@@ -588,13 +588,13 @@ BEGIN
 	SELECT id, saldo INTO v_cuenta_id, v_saldo_actual 
 	FROM cuentas
 	WHERE numero_cuenta = p_numero_cuenta 
-	FOR UPDATE
+	FOR UPDATE;
 
 	-- Verificar si cuenta existe
 	IF NOT FOUND THEN
 		RAISE NOTICE 'Cuenta % no encontrada', p_numero_cuenta; 
 		RETURN FALSE; 
-	END IF 
+	END IF;
 
  	-- Verificar saldo suficiente
 	IF v_saldo_actual < p_monto THEN 
