@@ -966,8 +966,8 @@ CREATE OR REPLACE FUNCTION ejecutar_saga_transferencia(
 ) AS $$ 
 DECLARE 
 	v_orden_id VARCHAR; 
-	v_pasol_exito BOOLEAN := FALSE; 
-	v_paso2 exito BOOLEAN := FALSE; 
+	v_paso1_exito BOOLEAN := FALSE; 
+	v_paso2_exito BOOLEAN := FALSE; 
 	v_paso3_exito BOOLEAN := FALSE; 
 	v_cuenta_origen_id INTEGER; 
 	v_saldo_origen NUMERIC; 
@@ -985,12 +985,12 @@ BEGIN
 			'cuenta_origen', p_cuenta_origen, 
 			'cuenta_destino', p_cuenta_destino, 
 			'monto', p_monto, 
-			'db_destino', p_db destino
+			'db_destino', p_db_destino
 		)
 	);
 
 	-- Definir pasos 
-	INSERT INTO saga_pasos (orden_id, numero_paso, nombre paso, estado) 
+	INSERT INTO saga_pasos (orden_id, numero_paso, nombre_paso, estado) 
 	VALUES 
 		(v_orden_id, 1, 'Bloquear Fondos Origen', 'PENDIENTE'), 
 		(v_orden_id, 2, 'Transferir a Destino', 'PENDIENTE'), 
@@ -1004,7 +1004,7 @@ BEGIN
 	RAISE NOTICE '--- PASO 1: Bloquear Fondos Origen ---'; 
 		
 	BEGIN 
-		SELECT id, saldo INTO v_cuenta_origen_id, v_saldo origen 
+		SELECT id, saldo INTO v_cuenta_origen_id, v_saldo_origen 
 		FROM cuentas 
 		WHERE numero_cuenta = p_cuenta_origen 
 		FOR UPDATE;
@@ -1014,7 +1014,7 @@ BEGIN
 			RAISE EXCEPTION 'Cuenta origen % no encontrada', p_cuenta_origen;  
 		END IF; 
 		
-		IF v_saldo origen < p_monto THEN 
+		IF v_saldo_origen < p_monto THEN 
 			RAISE EXCEPTION 'Saldo insuficiente. Disponible: %, Requerido: %', 
 			v_saldo_origen, p_monto; 
 		END IF;
@@ -1034,7 +1034,7 @@ BEGIN
 		INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
 		VALUES (v_orden_id, 'PASO COMPLETADO', 'Paso 1: Fondos bloqueados');
 		
-		v_pasol exito := TRUE; 
+		v_paso1_exito := TRUE; 
 		RAISE NOTICE 'Paso 1 completado'; 
 		
 	EXCEPTION 
@@ -1043,7 +1043,7 @@ BEGIN
 			SET estado = 'FALLIDO', 
 				timestamp_ejecucion = CURRENT_TIMESTAMP, 
 				error_mensaje = SQLERRM 
-			WHERE orden_id = v_orden_id AND numero paso = 1; 
+			WHERE orden_id = v_orden_id AND numero_paso = 1; 
 			
 			INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
 			VALUES (v_orden_id, 'PASO_FALLIDO', 'Paso 1: ' || SQLERRM); 
@@ -1073,7 +1073,7 @@ BEGIN
 		-- Acreditar en destino 
 		PERFORM dblink_exec('conn_destino', 
 			format('UPDATE cuentas SET saldo = saldo + %s WHERE numero_cuenta = %L', 
-			p_monto, p_cuenta destino) 
+			p_monto, p_cuenta_destino) 
 		);
 		
 		PERFORM dblink_disconnect('conn_destino'); 
@@ -1116,7 +1116,7 @@ BEGIN
 			UPDATE saga_pasos 
 			SET estado = 'COMPENSADO', 
 				timestanp_compensacion = CURRENT_TIMESTANP, 
-				conpensacion_ejecutada - 'Fondos desbloqueados' 
+				conpensacion_ejecutada = 'Fondos desbloqueados' 
 			WHERE orden_id = v_orden_id AND numero_paso = 1; 
 			
 			INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
@@ -1131,7 +1131,7 @@ BEGIN
 		END;
 
 	-- ========== PASO 3: Confirmar Débito Origen ==========
-	RAISE NOTICE '--- PASO 3: Confirmar Débito Origen ---'
+	RAISE NOTICE '--- PASO 3: Confirmar Débito Origen ---';
 	
 	UPDATE saga_ordenes SET paso_actual = 3 WHERE orden_id = v_orden_id; 
 	
@@ -1146,7 +1146,7 @@ BEGIN
 		UPDATE saga_pasos 
 		SET estado = 'EJECUTADO', 
 			timestamp_ejecucion = CURRENT_TIMESTAMP, 
-			accion_ejecutada = format('Debitados $%s de cuenta %s', p_monto, p_cuenta origen) 
+			accion_ejecutada = format('Debitados $%s de cuenta %s', p_monto, p_cuenta_origen) 
 		WHERE orden_id = v_orden_id AND numero_paso = 3; 
 		
 		INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
@@ -1156,7 +1156,7 @@ BEGIN
 		RAISE NOTICE 'Paso 3 completado';
 		
 		-- SAGA COMPLETADA 
-		UPDATE saga ordenes SET estado = 'COMPLETADA', timestamp_final = CURRENT_TIMESTAMP 
+		UPDATE saga_ordenes SET estado = 'COMPLETADA', timestamp_final = CURRENT_TIMESTAMP 
 		WHERE orden_id = v_orden_id; 
 	
 		RAISE NOTICE 'SAGA completada exitosamente';
@@ -1185,7 +1185,7 @@ BEGIN
 				
 				PERFORM dblink_exec('conn_destino', 
 					format('UPDATE cuentas SET saldo = saldo - %s WHERE numero cuenta = %L', 
-						p_monto, p_cuenta destino) 
+						p_monto, p_cuenta_destino) 
 				);
 				
 				PERFORM dblink_disconnect('conn_destino'); 
