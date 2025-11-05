@@ -171,24 +171,24 @@ SELECT * FROM cuentas;
 
 -- En terminal 1(Lima) - generar UUID
 SELECT 'TXN-' || to_char(now(), 'YYYYMMDD-HH24MISS') AS transaccion_id; 
--- Resultado ejemplo: TXN-20250928-143022 
+-- Resultado: TXN-20251103-161514 
 
 -- Iniciar transaccion
 BEGIN; 
 
 -- Registrar inicio en control 2PC
 INSERT INTO control_2pc (transaccion_id, estado_global, coordinador) 
-VALUES ('TXN-20250928-143022', 'INICIADA', 'LIMA'); 
+VALUES ('TXN-20251103-161514', 'INICIADA', 'LIMA'); 
 
 -- Mostrar estado
-SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20250928-143022'; 
+SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20251103-161514'; 
 
 -- Terminal 2 (Cusco): 
 BEGIN; 
 
 -- Registrar participacion
 INSERT INTO control_2pc (transaccion_id, estado_global, coordinador) 
-VALUES ('TXN-20250928-143022', 'INICIADA', 'LIMA');
+VALUES ('TXN-20251103-161514', 'INICIADA', 'LIMA');
 
 
 -- FASE 1: PREPARE (Preparación) 
@@ -205,7 +205,7 @@ FOR UPDATE;
 INSERT INTO transacciones_log 
 (transaccion_id, cuenta_id, tipo_operacion, monto, estado, descripcion) 
 SELECT 
-	'TXN-20250928-143022', 
+	'TXN-20251103-161514', 
 	id, 
 	'DEBITO', 
 	1000.00, 
@@ -218,18 +218,18 @@ WHERE numero_cuenta = 'LIMA-001';
 UPDATE transacciones_log 
 SET estado = 'PREPARED', 
 	timestamp_prepare = CURRENT_TIMESTAMP 
-WHERE transaccion_id = 'TXN-20250928-143022' 
+WHERE transaccion_id = 'TXN-20251103-161514' 
 AND tipo_operacion = 'DEBITO'; 
 
 -- PASO 1.4: VOTAR COMMIT 
 UPDATE control_2pc 
 SET votos_commit = votos_commit + 1, 
 	estado_global = 'PREPARANDO' 
-WHERE transaccion_id = 'TXN-20250928-143022';
+WHERE transaccion_id = 'TXN-20251103-161514';
 
 -- Verificar estado 
-SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-143022'; 
-SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20250928-143022'; 
+SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20251103-161514'; 
+SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20251103-161514'; 
 
 -- IMPORTANTE: NO HACER COMMIT NI ROLLBACK AÚN 
 -- La transacción sigue abierta esperando fase 2
@@ -247,7 +247,7 @@ FOR UPDATE;
 INSERT INTO transacciones_log 
 (transaccion_id, cuenta_id, tipo_operacion, monto, estado, descripcion) 
 SELECT 
-	'TXN-20250928-143022', 
+	'TXN-20251103-161514', 
 	id, 
 	'CREDITO', 
 	1000.00, 
@@ -260,17 +260,17 @@ WHERE numero_cuenta = 'CUSCO-001';
 UPDATE transacciones_log 
 SET estado = 'PREPARED', 
 	timestamp_prepare = CURRENT_TIMESTAMP 
-WHERE transaccion_id = 'TXN-20250928-143022' 
+WHERE transaccion_id = 'TXN-20251103-161514' 
 AND tipo_operacion = 'CREDITO'; 
 
 -- PASO 2.4: VOTAR COMMIT 
 UPDATE control_2pc 
 SET votos_commit = votos_commit + 1 
-WHERE transaccion_id = 'TXN-20250928-143022'; 
+WHERE transaccion_id = 'TXN-20251103-161514'; 
 
 -- Verificar estado 
-SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-143022'; 
-SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20250928-143022'; 
+SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20251103-161514'; 
+SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20251103-161514'; 
 
 -- IMPORTANTE: NO HACER COMMIT NI ROLLBACK AÚN
 -- FASE 2: DECISIÓN (Commit o Abort) 
@@ -284,7 +284,7 @@ SELECT transaccion_id, estado_global, votos_commit, votos_abort,
 		ELSE 'ESPERANDO VOTOS'
 	END AS decision 
 FROM control_2pc 
-WHERE transaccion_id = 'TXN-20250928-143022'; 
+WHERE transaccion_id = 'TXN-20251103-161514'; 
 
 
 -- Si todos votaron COMMIT (votos_commit = 2): 
@@ -302,14 +302,14 @@ WHERE numero_cuenta = 'LIMA-001';
 UPDATE transacciones_log 
 SET estado = 'COMMITTED', 
 	timestamp_final = CURRENT_TIMESTAMP 
-WHERE transaccion_id = 'TXN-20250928-143022' 
+WHERE transaccion_id = 'TXN-20251103-161514' 
 AND tipo_operacion = 'DEBITO'; 
 
 -- Actualizar control 
 UPDATE control_2pc 
 SET estado_global = 'CONFIRMADA', 
 	timestamp_decision = CURRENT_TIMESTAMP 
-WHERE transaccion_id = 'TXN-20250928-143022'; 
+WHERE transaccion_id = 'TXN-20251103-161514'; 
 
 -- COMMIT FINAL 
 COMMIT; 
@@ -331,14 +331,14 @@ WHERE numero_cuenta = 'CUSCO-001';
 UPDATE transacciones_log 
 SET estado = 'COMMITTED', 
 	timestamp_final = CURRENT_TIMESTAMP 
-WHERE transaccion_id = 'TXN-20250928-143022' 
+WHERE transaccion_id = 'TXN-20251103-161514' 
 AND tipo_operacion = 'DEBITO'; 
 
 -- Actualizar control 
 UPDATE control_2pc 
 SET estado_global = 'CONFIRMADA', 
 	timestamp_decision = CURRENT_TIMESTAMP 
-WHERE transaccion_id = 'TXN-20250928-143022'; 
+WHERE transaccion_id = 'TXN-20251103-161514'; 
 
 -- COMMIT FINAL 
 COMMIT; 
@@ -352,13 +352,13 @@ SELECT numero_cuenta, titular, saldo FROM cuentas WHERE numero_cuenta = 'CUSCO-0
 -- Ver estado final en Lima 
 
 SELECT * FROM cuentas WHERE numero_cuenta IN ('LIMA-001'); 
-SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-143022'; 
-SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20250928-143022';
+SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20251103-161514'; 
+SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20251103-161514';
 
 -- Ver estado final en Cusco 
  
 SELECT * FROM cuentas WHERE numero_cuenta IN ('CUSCO-001'); 
-SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-143022';
+SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20251103-161514';
 
 -- Verificar consistencia 
 
@@ -366,24 +366,24 @@ SELECT
 	'LIMA' as sucursal, 
 	SUM(CASE WHEN tipo_operacion = 'DEBITO' THEN -monto ELSE monto END) as balance_transaccion 
 FROM transacciones_log 
-WHERE transaccion_id = 'TXN-20250928-143022' 
+WHERE transaccion_id = 'TXN-20251103-161514' 
 UNION ALL 
 SELECT 
 'CUSCO' as sucursal, 
 SUM(CASE WHEN tipo_operacion = 'CREDITO' THEN monto ELSE -monto END) as balance_transaccion 
 FROM banco_cusco.transacciones_log 
-WHERE transaccion_id ='TXN-20250928-143022';
+WHERE transaccion_id ='TXN-20251103-161514';
 
 -- Generar nuevo ID
 SELECT 'TXN-' || to_char(now(),'YYYYMMDD-HH24MISS') AS transaccion_id;
--- ejemplo: TXN-20250928-144500
+-- Resultado: TXN-20251103-181454
 
 -- Terminal 1 (Lima): 
 
 BEGIN; 
 
 INSERT INTO control_2pc (transaccion_id, estado_global, coordinador) 
-VALUES ('TXN-20250928-144500', 'INICIADA', 'LIMA');
+VALUES ('TXN-20251103-181454', 'INICIADA', 'LIMA');
 
 -- Intentar preparar 
 SELECT numero_cuenta, titular, saldo 
@@ -397,7 +397,7 @@ FOR UPDATE;
 INSERT INTO transacciones_log 
 (transaccion_id, cuenta_id, tipo_operacion, monto, estado, descripcion) 
 SELECT 
-	'TXN-20250928-144500', 
+	'TXN-20251103-181454', 
 	id, 
 	'DEBITO', 
 	10000.00, 
@@ -410,26 +410,26 @@ WHERE numero_cuenta = 'LIMA-002';
 UPDATE control_2pc 
 SET votos_abort = votos_abort + 1, 
 	estado_global = 'ABORTADA'
-WHERE transaccion_id = 'TXN-20250928-144500'; 
+WHERE transaccion_id = 'TXN-20251103-181454'; 
 
 -- Marcar como ABORTADO
 UPDATE transacciones_log 
 SET estado = 'ABORTED', 
 	timestamp_final = CURRENT_TIMESTAMP 
-WHERE transaccion_id = 'TXN-20250928-144500'; 
+WHERE transaccion_id = 'TXN-20251103-181454'; 
 
 -- ROLLBACK
 ROLLBACK; 
 
 
-SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-144500';
+SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20251103-181454';
 
 -- Terminal 3 (Arequipa): 
 BEGIN; 
 
 -- Como el coordinador ya decidio ABORT, este participante tambien aborta
 INSERT INTO control_2pc (transaccion_id, estado_global, coordinador) 
-VALUES ('TXN-20250928-144500', 'ABORTADA', 'LIMA'); 
+VALUES ('TXN-20251103-181454', 'ABORTADA', 'LIMA'); 
 
 ROLLBACK; 
 
@@ -723,16 +723,16 @@ $$ LANGUAGE plpgsql;
 
 -- Generar id 
 SELECT 'TXN-' || to_char(now(), 'YYYYMMDD-HH24MISS') AS transaccion_id; 
--- ejemplo: TXN-20250928-150000
+-- ejemplo: TXN-20251105-110032
 
 BEGIN;
 
 -- Registrar en control
 INSERT INTO control_2pc (transaccion_id, estado_global, coordinador) 
-VALUES ('TXN-20250928-150000', 'PREPARANDO', 'LIMA'); 
+VALUES ('TXN-20251105-110032', 'PREPARANDO', 'LIMA'); 
 
 -- FASE PREPARE
-SELECT preparar_credito('TXN-20250928-150000', 'LIMA-004', 800.00); 
+SELECT preparar_credito('TXN-20251105-110032', 'LIMA-004', 800.00); 
 -- Resultado: TRUE = VOTE-COMMIT
 -- NO HACER COMMIT TODAVIA
 
@@ -741,33 +741,33 @@ BEGIN;
 
 -- Registrar en control
 INSERT INTO control_2pc (transaccion_id, estado_global, coordinador) 
-VALUES ('TXN-20250928-150000', 'PREPARANDO', 'LIMA'); 
+VALUES ('TXN-20251105-110032', 'PREPARANDO', 'LIMA'); 
 
 -- FASE PREPARE
-SELECT preparar_credito('TXN-20250928-150000', 'CUSCO-003', 800.00); 
+SELECT preparar_credito('TXN-20251105-110032', 'CUSCO-003', 800.00); 
 -- Resultado: TRUE = VOTE-COMMIT
 -- NO HACER COMMIT TODAVIA
 
 -- Terminal 4 (Monitor - verificar votos): 
 
 -- Banco Lima
-SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-150000'; 
+SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20251105-110032'; 
 
 -- Banco Cusco
-SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-150000';
+SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20251105-110032';
 
 -- Si ambos votaron COMMIT, ejecutar FASE 2: 
 -- Terminal 1 (Lima): 
 
 -- FASE  COMMIT 
-SELECT confirmar_transaccion('TXN-20250928-150000');
+SELECT confirmar_transaccion('TXN-20251105-110032');
 
 -- COMMIT de la transacción 
 COMMIT;
 
 -- Verificar resultado 
 SELECT numero_cuenta, titular, saldo FROM cuentas WHERE numero_cuenta = 'LIMA-004'; 
-SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-1500000'; 
+SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20251105-1100320'; 
 
 -- Terminal 2 (Cusco): 
 
@@ -913,8 +913,6 @@ SELECT * FROM transacciones_log ORDER BY timestamp_inicio DESC LIMIT 5;
 -- PASO 6: IMPLEMENTAR SAGA CON COMPENSACIONES 
 -- 6.1 Crear tablas para SAGA 
 -- Terminal 1 (Lima): 
- 
-\c banco_lima 
 
 -- Tabla de órdenes SAGA 
 CREATE TABLE saga_ordenes ( 
