@@ -1115,9 +1115,9 @@ BEGIN
 			
 			UPDATE saga_pasos 
 			SET estado = 'COMPENSADO', 
-				timestanp_compensacion = CURRENT_TIMESTANP, 
-				conpensacion_ejecutada = 'Fondos desbloqueados' 
-			WHERE orden_id = v_orden_id AND numero_paso = 1; 
+			    timestamp_compensacion = CURRENT_TIMESTAMP, 
+			    compensacion_ejecutada = 'Fondos desbloqueados' 
+			WHERE orden_id = v_orden_id AND numero_paso = 1;
 			
 			INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
 			VALUES (v_orden_id, 'COMPENSACION_EJECUTADA', 'Compensación Paso 1: Fondos desbloqueados');
@@ -1192,9 +1192,9 @@ BEGIN
 				
 					UPDATE saga_pasos 
 					SET estado = 'COMPENSADO', 
-						timestamp_compensacion = CURRENT_TIMESTAMP, 
-						compensacion_ejecutada = 'Crédito revertido en destino' 
-					WHERE orden_id = v_orden_id AND numero_paso = 2; 
+					    timestamp_compensacion = CURRENT_TIMESTAMP, 
+					    compensacion_ejecutada = 'Crédito revertido en destino' 
+					WHERE orden_id = v_orden_id AND numero_paso = 2;
 			EXCEPTION 
 				WHEN OTHERS THEN 
 					RAISE NOTICE 'Error en compensación paso 2: %', SQLERRM; 
@@ -1213,7 +1213,8 @@ BEGIN
 			WHERE orden_id = v_orden_id AND numero_paso = 1;
 			
 			-- Finalizar SAGA 
-			UPDATE saga_ordenes SET estado = "COMPENSADA", timestamp_final = CURRENT_TIMESTAMP 
+			UPDATE saga_ordenes 
+			SET estado = 'COMPENSADA', timestamp_final = CURRENT_TIMESTAMP 
 			WHERE orden_id = v_orden_id; 
 			
 			RETURN QUERY SELECT FALSE, v_orden_id, 'Fallo en paso 3 (compensado): ' || SQLERRM; 
