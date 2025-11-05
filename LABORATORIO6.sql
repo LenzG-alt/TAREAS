@@ -2,10 +2,6 @@
 -- PARTE A: SQL PURO CON MÚLTIPLES TERMINALES 
 -- PASO 1: PREPARACIÓN DEL ENTORNO 
 -- 1.1 Crear las bases de datos 
--- Abrir Terminal 1 (como superusuario): 
-
--- Conectar como postgres
-psql -U postgres
 
 -- Crear base de datos
 CREATE DATABASE banco_lima; 
@@ -20,14 +16,9 @@ GRANT ALL PRIVILEGES ON DATABASE banco_lima TO estudiante;
 GRANT ALL PRIVILEGES ON DATABASE banco_cusco TO estudiante; 
 GRANT ALL PRIVILEGES ON DATABASE banco_arequipa TO estudiante; 
 
--- Salir
-\q
 
 -- 1.2 Estructura de tablas para BANCO_LIMA 
 -- Conectar a banco_lima: 
-
-psql -U estudiante -d banco_lima
-
 -- Tabla de cuentas -- 
 CREATE TABLE cuentas ( 
 	id SERIAL PRIMARY KEY, 
@@ -79,9 +70,6 @@ SELECT * FROM cuentas;
 
 -- 1.3 Estructura para BANCO_CUSCO 
 -- Abrir Terminal 2 y conectar: 
-
-psql -U estudiante -d banco_cusco 
-
 -- Misma tablas
 CREATE TABLE cuentas ( 
 	id SERIAL PRIMARY KEY, 
@@ -132,8 +120,6 @@ SELECT * FROM cuentas;
 
 -- 1.4 Estructura para BANCO AREQUIPA 
 -- Abrir Terminal 3 y conectar: 
- 
-psql -U estudiante -d banco_arequipa 
 -- Misma tablas
 CREATE TABLE cuentas ( 
 	id SERIAL PRIMARY KEY, 
@@ -183,22 +169,9 @@ INSERT INTO cuentas (numero_cuenta, titular, saldo) VALUES
 
 SELECT * FROM cuentas;
 
--- EJERCICIO 1: TWO-PHASE COMMIT MANUAL PASO A PASO 
--- Escenario: 
--- Transferir $1,000 de LIMA-001 (Lima) a CUSCO-001 (Cusco) 
--- Generar ID de transacción único: 
-
 -- En terminal 1(Lima) - generar UUID
 SELECT 'TXN-' || to_char(now(), 'YYYYMMDD-HH24MISS') AS transaccion_id; 
 -- Resultado ejemplo: TXN-20250928-143022 
--- COPIAR este ID para usar en todos los pasos
-
--- Usar este ID en todos los siguientes comandos
---(reemplazar 'TXN-20250928-143022' con tu ID generado) 
-
--- FASE 0: INICIAR TRANSACCIÓN EN TODOS LOS NODOS 
-
--- Terminal 1 (Lima): 
 
 -- Iniciar transaccion
 BEGIN; 
@@ -227,9 +200,6 @@ FROM cuentas
 WHERE numero_cuenta = 'LIMA-001' 
 FOR UPDATE; 
 
--- Si saldo >= 1000, continuar
--- Si saldo <= 1000, votar ABORT
-
 
 -- PASO 1.2: Registrar operacion PENDIENTE 
 INSERT INTO transacciones_log 
@@ -243,7 +213,6 @@ SELECT
 	'Transferencia a CUSCO-001' 
 FROM cuentas 
 WHERE numero_cuenta = 'LIMA-001'; 
-
 
 -- PASO 1.3: Cambiar estado a PREPARED 
 UPDATE transacciones_log 
@@ -273,8 +242,6 @@ FROM cuentas
 WHERE numero_cuenta = 'CUSCO-001' 
 FOR UPDATE; 
 
---Si existe, continuar 
---Si no existe, votar ABORT 
 
 -- PASO 2.2: Registrar operación PENDIENTE 
 INSERT INTO transacciones_log 
@@ -308,9 +275,6 @@ SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20250928-143022';
 -- IMPORTANTE: NO HACER COMMIT NI ROLLBACK AÚN
 -- FASE 2: DECISIÓN (Commit o Abort) 
 -- Terminal 4 (Monitor/Coordinador): 
-
--- Conectar a banco_lima para ver estado global 
-psql -U estudiante -d banco_lima 
 
 -- Verificar votos 
 SELECT transaccion_id, estado_global, votos_commit, votos_abort, 
@@ -386,18 +350,18 @@ SELECT numero_cuenta, titular, saldo FROM cuentas WHERE numero_cuenta = 'CUSCO-0
 -- Terminal 4 (Monitor): 
 
 -- Ver estado final en Lima 
-\c banco_lima 
+
 SELECT * FROM cuentas WHERE numero_cuenta IN ('LIMA-001'); 
 SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-143022'; 
 SELECT * FROM control_2pc WHERE transaccion_id = 'TXN-20250928-143022';
 
 -- Ver estado final en Cusco 
-\c banco_cusco 
+ 
 SELECT * FROM cuentas WHERE numero_cuenta IN ('CUSCO-001'); 
 SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-143022';
 
 -- Verificar consistencia 
-\c banco_lima 
+
 SELECT 
 	'LIMA' as sucursal, 
 	SUM(CASE WHEN tipo_operacion = 'DEBITO' THEN -monto ELSE monto END) as balance_transaccion 
@@ -409,10 +373,6 @@ SELECT
 SUM(CASE WHEN tipo_operacion = 'CREDITO' THEN monto ELSE -monto END) as balance_transaccion 
 FROM banco_cusco.transacciones_log 
 WHERE transaccion_id ='TXN-20250928-143022';
-
--- El balance debe ser 0 (lo que sale de Lima entra a Cusco)
--- EJERCICIO 2: SIMULACIÓN DE ABORT (Saldo Insuficiente) 
--- Escenario: Intentar transferir $10,000 de LIMA-002 (saldo: $3,000) a AQP-001 
 
 -- Generar nuevo ID
 SELECT 'TXN-' || to_char(now(),'YYYYMMDD-HH24MISS') AS transaccion_id;
@@ -573,8 +533,6 @@ ROLLBACK;
 -- 4.1 Función de preparación (PREPARE) 
 -- Terminal 1 (Lima): 
 
-\c banco_lima 
-
 CREATE OR REPLACE FUNCTION preparar_debito( 
 	p_transaccion_id VARCHAR, 
 	p_numero_cuenta VARCHAR, 
@@ -638,8 +596,7 @@ ROLLBACK;
 
 -- 4.2 Función de preparación crédito 
 -- Terminal 2 (Cusco): 
- 
-\c banco_cusco 
+
 
 CREATE OR REPLACE FUNCTION preparar_credito( 
 	p_transaccion_id VARCHAR, 
@@ -793,13 +750,10 @@ SELECT preparar_credito('TXN-20250928-150000', 'CUSCO-003', 800.00);
 
 -- Terminal 4 (Monitor - verificar votos): 
 
-\c banco_lima 
-
--- Verificar estado de preparación 
+-- Banco Lima
 SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-150000'; 
 
-\c banco_cusco 
-
+-- Banco Cusco
 SELECT * FROM transacciones_log WHERE transaccion_id = 'TXN-20250928-150000';
 
 -- Si ambos votaron COMMIT, ejecutar FASE 2: 
@@ -840,11 +794,11 @@ CREATE OR REPLACE FUNCTION transferencia_distribuida_coordinador(
 exito BOOLEAN, 
 mensaje TEXT, 
 transaccion_id VARCHAR 
-) AS $ 
+) AS $$
 DECLARE 
 	v_transaccion_id VARCHAR; 
 	v_prepare_origen BOOLEAN; 
-	v_prepare destino BOOLEAN; 
+	v_prepare_destino BOOLEAN; 
 	v_dblink_name VARCHAR; 
 	v_dblink_conn VARCHAR; 
 BEGIN 
@@ -864,24 +818,24 @@ INSERT INTO control_2pc (transaccion_id, estado_global, coordinador, participant
 VALUES (v_transaccion_id, 'PREPARANDO', 'LIMA', ARRAY['LIMA', UPPER(p_db_destino)]);
 
 -- FASE 1: PREPARE  
-RAISE NOTICE '--- FASE 1: PREPARE --- '
+RAISE NOTICE '--- FASE 1: PREPARE --- ';
 
 -- Preparar débito local 
 v_prepare_origen := preparar_debito(v_transaccion_id, p_cuenta_origen, p_monto); 
 RAISE NOTICE 'Prepare ORIGEN: %', CASE WHEN v_prepare_origen THEN 'COMMIT' ELSE 'ABORT' END; 
 
 -- Preparar crédito remoto 
-SELECT resultado INTO v_prepare destino 
+SELECT resultado INTO v_prepare_destino 
 FROM dblink(v_dblink_name, 
 	format('SELECT preparar_credito(%L, %L, %s)', 
 			v_transaccion_id, p_cuenta_destino, p_monto) 
 ) AS t1(resultado BOOLEAN); 
-RAISE NOTICE 'Prepare DESTINO: %', CASE WHEN v_prepare destino THEN 'COMMIT' ELSE 'ABORT' END;
+RAISE NOTICE 'Prepare DESTINO: %', CASE WHEN v_prepare_destino THEN 'COMMIT' ELSE 'ABORT' END;
 
 -- FASE 2: DECISIÓN 
-RAISE NOTICE '--- FASE 2: DECISIÓN --- ' 
+RAISE NOTICE '--- FASE 2: DECISIÓN --- ';
 
-IF v_prepare_origen AND v_prepare destino THEN -- 
+IF v_prepare_origen AND v_prepare_destino THEN -- 
 	-- COMMIT GLOBAL 
 	RAISE NOTICE 'Decisión: GLOBAL-COMMIT';
 	
@@ -889,7 +843,7 @@ IF v_prepare_origen AND v_prepare destino THEN --
 	PERFORM confirmar_transaccion(v_transaccion_id);
 	
 	-- Confirmar remoto 
-	PERFORM dblink exec(v_dblink_name, 
+	PERFORM dblink_exec(v_dblink_name, 
 		format ('SELECT confirmar_transaccion(%L)', v_transaccion_id)
 	);
 	-- Desconectar 
@@ -909,7 +863,7 @@ ELSE
 	);
 	
 		-- Desconectar 
-		PERFORM dblink disconnect(v_dblink_name); 
+		PERFORM dblink_disconnect(v_dblink_name); 
 		RETURN QUERY SELECT FALSE, 'Transferencia abortada - Verificar logs', v_transaccion_id; 
 	END IF; 
 EXCEPTION 
