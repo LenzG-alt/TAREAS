@@ -955,270 +955,281 @@ CREATE TABLE saga_eventos (
 -- Terminal 1 (Lima): 
  
 CREATE OR REPLACE FUNCTION ejecutar_saga_transferencia( 
-	p_cuenta_origen VARCHAR, 
-	p_cuenta_destino VARCHAR, 
-	p_monto NUMERIC, 
-	p_db_destino VARCHAR 
+    p_cuenta_origen VARCHAR, 
+    p_cuenta_destino VARCHAR, 
+    p_monto NUMERIC, 
+    p_db_destino VARCHAR 
 ) RETURNS TABLE ( 
-	exito BOOLEAN, 
-	orden_id VARCHAR, 
-	mensaje TEXT 
+    exito BOOLEAN, 
+    orden_id VARCHAR, 
+    mensaje TEXT 
 ) AS $$ 
 DECLARE 
-	v_orden_id VARCHAR; 
-	v_paso1_exito BOOLEAN := FALSE; 
-	v_paso2_exito BOOLEAN := FALSE; 
-	v_paso3_exito BOOLEAN := FALSE; 
-	v_cuenta_origen_id INTEGER; 
-	v_saldo_origen NUMERIC; 
+    v_orden_id VARCHAR; 
+    v_paso1_exito BOOLEAN := FALSE; 
+    v_paso2_exito BOOLEAN := FALSE; 
+    v_paso3_exito BOOLEAN := FALSE; 
+    v_cuenta_origen_id INTEGER; 
+    v_saldo_origen NUMERIC; 
 BEGIN
-	-- Generar ID de orden 
-	v_orden_id := 'SAGA-' || to_char(now(), 'YYYYMMDD-HH24MISS');
-	
-	-- Crear orden SAGA 
-	INSERT INTO saga_ordenes (orden_id, tipo, estado, datos) 
-	VALUES ( 
-		v_orden_id, 
-		'TRANSFERENCIA', 
-		'INICIADA', 
-		jsonb_build_object( 
-			'cuenta_origen', p_cuenta_origen, 
-			'cuenta_destino', p_cuenta_destino, 
-			'monto', p_monto, 
-			'db_destino', p_db_destino
-		)
-	);
+    -- Generar ID de orden 
+    v_orden_id := 'SAGA-' || to_char(now(), 'YYYYMMDD-HH24MISS');
+    
+    -- Crear orden SAGA 
+    INSERT INTO saga_ordenes (orden_id, tipo, estado, datos) 
+    VALUES ( 
+        v_orden_id, 
+        'TRANSFERENCIA', 
+        'INICIADA', 
+        jsonb_build_object( 
+            'cuenta_origen', p_cuenta_origen, 
+            'cuenta_destino', p_cuenta_destino, 
+            'monto', p_monto, 
+            'db_destino', p_db_destino
+        )
+    );
 
-	-- Definir pasos 
-	INSERT INTO saga_pasos (orden_id, numero_paso, nombre_paso, estado) 
-	VALUES 
-		(v_orden_id, 1, 'Bloquear Fondos Origen', 'PENDIENTE'), 
-		(v_orden_id, 2, 'Transferir a Destino', 'PENDIENTE'), 
-		(v_orden_id, 3, 'Confirmar Débito Origen', 'PENDIENTE'); -- 
-	
-	-- Actualizar estado 
-	UPDATE saga_ordenes SET estado = 'EN PROGRESO', paso_actual = 1 
-	WHERE orden_id = v_orden_id; 
+    -- Definir pasos 
+    INSERT INTO saga_pasos (orden_id, numero_paso, nombre_paso, estado) 
+    VALUES 
+        (v_orden_id, 1, 'Bloquear Fondos Origen', 'PENDIENTE'), 
+        (v_orden_id, 2, 'Transferir a Destino', 'PENDIENTE'), 
+        (v_orden_id, 3, 'Confirmar Débito Origen', 'PENDIENTE'); 
 
-	-- ======== PASO 1: Bloquear Fondos Origen ========
-	RAISE NOTICE '--- PASO 1: Bloquear Fondos Origen ---'; 
-		
-	BEGIN 
-		SELECT id, saldo INTO v_cuenta_origen_id, v_saldo_origen 
-		FROM cuentas 
-		WHERE numero_cuenta = p_cuenta_origen 
-		FOR UPDATE;
-			
-		
-		IF NOT FOUND THEN 
-			RAISE EXCEPTION 'Cuenta origen % no encontrada', p_cuenta_origen;  
-		END IF; 
-		
-		IF v_saldo_origen < p_monto THEN 
-			RAISE EXCEPTION 'Saldo insuficiente. Disponible: %, Requerido: %', 
-			v_saldo_origen, p_monto; 
-		END IF;
-	
-		-- Marcar fondos como bloqueados (usando version como lock) 
-		UPDATE cuentas 
-			SET version = version + 1 
-		WHERE id = v_cuenta_origen_id;
-		
-		-- Registrar éxito 
-		UPDATE saga_pasos 
-		SET estado = 'EJECUTADO', 
-			timestamp_ejecucion = CURRENT_TIMESTAMP, 
-			accion_ejecutada = format('Bloqueados $%s en cuenta %s', p_monto, p_cuenta_origen) 
-		WHERE orden_id = v_orden_id AND numero_paso = 1; 
+    -- Actualizar estado 
+    UPDATE saga_ordenes 
+    SET estado = 'EN PROGRESO', paso_actual = 1 
+    WHERE saga_ordenes.orden_id = v_orden_id; 
 
-		INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
-		VALUES (v_orden_id, 'PASO COMPLETADO', 'Paso 1: Fondos bloqueados');
-		
-		v_paso1_exito := TRUE; 
-		RAISE NOTICE 'Paso 1 completado'; 
-		
-	EXCEPTION 
-		WHEN OTHERS THEN 
-			UPDATE saga_pasos 
-			SET estado = 'FALLIDO', 
-				timestamp_ejecucion = CURRENT_TIMESTAMP, 
-				error_mensaje = SQLERRM 
-			WHERE orden_id = v_orden_id AND numero_paso = 1; 
-			
-			INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
-			VALUES (v_orden_id, 'PASO_FALLIDO', 'Paso 1: ' || SQLERRM); 
-			
-			RAISE NOTICE 'Paso 1 falló: %', SQLERRM;
-			
-				-- Finalizar SAGA como fallida 
-				UPDATE saga_ordenes SET estado = 'FALLIDA', timestamp_final = CURRENT_TIMESTAMP 
-				WHERE orden_id = v_orden_id; 
-				RETURN QUERY SELECT FALSE, v_orden_id, 'Fallo en paso 1: ' || SQLERRM; 
-				RETURN; 
-		END;
+    -- ======== PASO 1: Bloquear Fondos Origen ========
+    RAISE NOTICE '--- PASO 1: Bloquear Fondos Origen ---'; 
+        
+    BEGIN 
+        SELECT id, saldo INTO v_cuenta_origen_id, v_saldo_origen 
+        FROM cuentas 
+        WHERE numero_cuenta = p_cuenta_origen 
+        FOR UPDATE;
+
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'Cuenta origen % no encontrada', p_cuenta_origen;  
+        END IF; 
+        
+        IF v_saldo_origen < p_monto THEN 
+            RAISE EXCEPTION 'Saldo insuficiente. Disponible: %, Requerido: %', 
+            v_saldo_origen, p_monto; 
+        END IF;
+    
+        -- Marcar fondos como bloqueados (usando version como lock) 
+        UPDATE cuentas 
+        SET version = version + 1 
+        WHERE cuentas.id = v_cuenta_origen_id;
+        
+        -- Registrar éxito 
+        UPDATE saga_pasos 
+        SET estado = 'EJECUTADO', 
+            timestamp_ejecucion = CURRENT_TIMESTAMP, 
+            accion_ejecutada = format('Bloqueados $%s en cuenta %s', p_monto, p_cuenta_origen) 
+        WHERE saga_pasos.orden_id = v_orden_id AND numero_paso = 1; 
+
+        INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
+        VALUES (v_orden_id, 'PASO COMPLETADO', 'Paso 1: Fondos bloqueados');
+        
+        v_paso1_exito := TRUE; 
+        RAISE NOTICE 'Paso 1 completado'; 
+        
+    EXCEPTION 
+        WHEN OTHERS THEN 
+            UPDATE saga_pasos 
+            SET estado = 'FALLIDO', 
+                timestamp_ejecucion = CURRENT_TIMESTAMP, 
+                error_mensaje = SQLERRM 
+            WHERE saga_pasos.orden_id = v_orden_id AND numero_paso = 1; 
+            
+            INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
+            VALUES (v_orden_id, 'PASO_FALLIDO', 'Paso 1: ' || SQLERRM); 
+            
+            RAISE NOTICE 'Paso 1 falló: %', SQLERRM;
+            
+            -- Finalizar SAGA como fallida 
+            UPDATE saga_ordenes 
+            SET estado = 'FALLIDA', timestamp_final = CURRENT_TIMESTAMP 
+            WHERE saga_ordenes.orden_id = v_orden_id; 
+            RETURN QUERY SELECT FALSE, v_orden_id, 'Fallo en paso 1: ' || SQLERRM; 
+            RETURN; 
+    END;
 
 
-	-- ============ PASO 2: Transferir a Destino ============: 
-	RAISE NOTICE  ' --- PASO 2: Transferir a Destino ---'; 
-	
-	UPDATE saga_ordenes SET paso_actual = 2 WHERE orden_id = v_orden_id; 
-	
-	BEGIN
-	
-		-- Simular transferencia a destino (usando dblink) 
-		PERFORM dblink_connect('conn_destino', 
-			format('host=localhost dbname=banco_%s user=estudiante password=lab2024', p_db_destino) 
-		);
+    -- ============ PASO 2: Transferir a Destino ============: 
+    RAISE NOTICE  ' --- PASO 2: Transferir a Destino ---'; 
+    
+    UPDATE saga_ordenes 
+    SET paso_actual = 2 
+    WHERE saga_ordenes.orden_id = v_orden_id; 
+    
+    BEGIN
+    
+        -- Simular transferencia a destino (usando dblink) 
+        PERFORM dblink_connect('conn_destino', 
+            format('host=localhost dbname=banco_%s user=estudiante password=lab2024', p_db_destino) 
+        );
 
-		-- Acreditar en destino 
-		PERFORM dblink_exec('conn_destino', 
-			format('UPDATE cuentas SET saldo = saldo + %s WHERE numero_cuenta = %L', 
-			p_monto, p_cuenta_destino) 
-		);
-		
-		PERFORM dblink_disconnect('conn_destino'); 
-		
-		-- Registrar éxito 
-		UPDATE saga_pasos 
-		SET estado = 'EJECUTADO', 
-			timestamp_ejecucion = CURRENT_TIMESTAMP, 
-			accion_ejecutada = format('Acreditados $%s en cuenta %s', p_monto, p_cuenta_destino) 
-		WHERE orden_id = v_orden_id AND numero_paso = 2; 
+        -- Acreditar en destino 
+        PERFORM dblink_exec('conn_destino', 
+            format('UPDATE cuentas SET saldo = saldo + %s WHERE numero_cuenta = %L', 
+            p_monto, p_cuenta_destino) 
+        );
+        
+        PERFORM dblink_disconnect('conn_destino'); 
+        
+        -- Registrar éxito 
+        UPDATE saga_pasos 
+        SET estado = 'EJECUTADO', 
+            timestamp_ejecucion = CURRENT_TIMESTAMP, 
+            accion_ejecutada = format('Acreditados $%s en cuenta %s', p_monto, p_cuenta_destino) 
+        WHERE saga_pasos.orden_id = v_orden_id AND numero_paso = 2; 
 
-		INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
-		VALUES (v_orden_id, 'PASO COMPLETADO', 'Paso 2: Fondos acreditados en destino'); 
+        INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
+        VALUES (v_orden_id, 'PASO COMPLETADO', 'Paso 2: Fondos acreditados en destino'); 
 
-		v_paso2_exito := TRUE; 
-		RAISE NOTICE 'Paso 2 completado'; 
-		
-	EXCEPTION 
-		WHEN OTHERS THEN 
-			UPDATE saga_pasos 
-			SET estado = 'FALLIDO', 
-				timestamp_ejecucion = CURRENT_TIMESTAMP, 
-				error_mensaje = SQLERRM 
-			WHERE orden_id = v_orden_id AND numero_paso = 2; 
-			
-			INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
-			VALUES (v_orden_id, 'PASO_FALLIDO', 'Paso 2: ' || SQLERRM); 
-			
-			RAISE NOTICE 'Paso 2 falló: %', SQLERRM;
-			
-			-- COMPENSAR PASO 1 
-			RAISE NOTICE 'Iniciando compensaciones...'; 
-			UPDATE saga_ordenes SET estado = 'COMPENSANDO' WHERE orden_id = v_orden_id;
-	
-			-- Compensación: Desbloquear fondos 
-			UPDATE cuentas 
-			SET version = version - 1 
-			WHERE id = v_cuenta_origen_id; 
-			
-			UPDATE saga_pasos 
-			SET estado = 'COMPENSADO', 
-			    timestamp_compensacion = CURRENT_TIMESTAMP, 
-			    compensacion_ejecutada = 'Fondos desbloqueados' 
-			WHERE orden_id = v_orden_id AND numero_paso = 1;
-			
-			INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
-			VALUES (v_orden_id, 'COMPENSACION_EJECUTADA', 'Compensación Paso 1: Fondos desbloqueados');
-	
-			-- Finalizar SAGA como compensada 
-			UPDATE saga_ordenes SET estado = 'COMPENSADA', timestamp_final = CURRENT_TIMESTAMP 
-			WHERE orden_id = v_orden_id; 
-			
-			RETURN QUERY SELECT FALSE, v_orden_id, 'Fallo en paso 2 (compensado): ' || SQLERRM; 
-			RETURN; 
-		END;
+        v_paso2_exito := TRUE; 
+        RAISE NOTICE 'Paso 2 completado'; 
+        
+    EXCEPTION 
+        WHEN OTHERS THEN 
+            UPDATE saga_pasos 
+            SET estado = 'FALLIDO', 
+                timestamp_ejecucion = CURRENT_TIMESTAMP, 
+                error_mensaje = SQLERRM 
+            WHERE saga_pasos.orden_id = v_orden_id AND numero_paso = 2; 
+            
+            INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
+            VALUES (v_orden_id, 'PASO_FALLIDO', 'Paso 2: ' || SQLERRM); 
+            
+            RAISE NOTICE 'Paso 2 falló: %', SQLERRM;
+            
+            -- COMPENSAR PASO 1 
+            RAISE NOTICE 'Iniciando compensaciones...'; 
+            UPDATE saga_ordenes 
+            SET estado = 'COMPENSANDO' 
+            WHERE saga_ordenes.orden_id = v_orden_id;
+    
+            -- Compensación: Desbloquear fondos 
+            UPDATE cuentas 
+            SET version = version - 1 
+            WHERE cuentas.id = v_cuenta_origen_id; 
+            
+            UPDATE saga_pasos 
+            SET estado = 'COMPENSADO', 
+                timestamp_compensacion = CURRENT_TIMESTAMP, 
+                compensacion_ejecutada = 'Fondos desbloqueados' 
+            WHERE saga_pasos.orden_id = v_orden_id AND numero_paso = 1; 
+            
+            INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
+            VALUES (v_orden_id, 'COMPENSACION_EJECUTADA', 'Compensación Paso 1: Fondos desbloqueados');
+    
+            -- Finalizar SAGA como compensada 
+            UPDATE saga_ordenes 
+            SET estado = 'COMPENSADA', timestamp_final = CURRENT_TIMESTAMP 
+            WHERE saga_ordenes.orden_id = v_orden_id; 
+            
+            RETURN QUERY SELECT FALSE, v_orden_id, 'Fallo en paso 2 (compensado): ' || SQLERRM; 
+            RETURN; 
+    END;
 
-	-- ========== PASO 3: Confirmar Débito Origen ==========
-	RAISE NOTICE '--- PASO 3: Confirmar Débito Origen ---';
-	
-	UPDATE saga_ordenes SET paso_actual = 3 WHERE orden_id = v_orden_id; 
-	
-	BEGIN
-		-- Ejecutar débito final 
-		UPDATE cuentas 
-		SET saldo = saldo - p_monto, 
-			ultima_modificacion = CURRENT_TIMESTAMP 
-		WHERE id = v_cuenta_origen_id; 
-	
-		-- Registrar éxito 
-		UPDATE saga_pasos 
-		SET estado = 'EJECUTADO', 
-			timestamp_ejecucion = CURRENT_TIMESTAMP, 
-			accion_ejecutada = format('Debitados $%s de cuenta %s', p_monto, p_cuenta_origen) 
-		WHERE orden_id = v_orden_id AND numero_paso = 3; 
-		
-		INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
-		VALUES (v_orden_id, 'PASO COMPLETADO', 'Paso 3: Débito confirmado'); 
-	
-		v_paso3_exito := TRUE; 
-		RAISE NOTICE 'Paso 3 completado';
-		
-		-- SAGA COMPLETADA 
-		UPDATE saga_ordenes SET estado = 'COMPLETADA', timestamp_final = CURRENT_TIMESTAMP 
-		WHERE orden_id = v_orden_id; 
-	
-		RAISE NOTICE 'SAGA completada exitosamente';
-		
-		RETURN QUERY SELECT TRUE, v_orden_id, 'Transferencia SAGA completada';
-		
-	EXCEPTION 
-		WHEN OTHERS THEN 
-			UPDATE saga_pasos 
-			SET estado = 'FALLIDO', 
-				timestamp_ejecucion = CURRENT_TIMESTAMP, 
-				error_mensaje = SQLERRM 
-			WHERE orden_id = v_orden_id AND numero_paso = 3;
-			
-			RAISE NOTICE 'Paso 3 falló: %', SQLERRM;
-			
-			-- COMPENSAR PASO 2 y PASO 1 
-			RAISE NOTICE 'Iniciando compensaciones completas...'; 
-			UPDATE saga_ordenes SET estado = 'COMPENSANDO' WHERE orden_id = v_orden_id; -- 
-	
-			-- Compensación Paso 2: Revertir crédito en destino 
-			BEGIN 
-				PERFORM dblink_connect('conn_destino', 
-					format('host=localhost dbname-banco %s user=estudiante password=lab2024', p_db_destino)
-				);
-				
-				PERFORM dblink_exec('conn_destino', 
-					format('UPDATE cuentas SET saldo = saldo - %s WHERE numero cuenta = %L', 
-						p_monto, p_cuenta_destino) 
-				);
-				
-				PERFORM dblink_disconnect('conn_destino'); 
-				
-					UPDATE saga_pasos 
-					SET estado = 'COMPENSADO', 
-					    timestamp_compensacion = CURRENT_TIMESTAMP, 
-					    compensacion_ejecutada = 'Crédito revertido en destino' 
-					WHERE orden_id = v_orden_id AND numero_paso = 2;
-			EXCEPTION 
-				WHEN OTHERS THEN 
-					RAISE NOTICE 'Error en compensación paso 2: %', SQLERRM; 
-	
-			END;
-		
-			-- Compensación Paso 1: Desbloquear fondos 
-			UPDATE cuentas 
-			SET version = version - 1 
-			WHERE id = v_cuenta_origen_id; 
-			
-			UPDATE saga_pasos 
-			SET estado = 'COMPENSADO', 
-				timestamp_compensacion = CURRENT_TIMESTAMP, 
-				compensacion_ejecutada = 'Fondos desbloqueados' 
-			WHERE orden_id = v_orden_id AND numero_paso = 1;
-			
-			-- Finalizar SAGA 
-			UPDATE saga_ordenes 
-			SET estado = 'COMPENSADA', timestamp_final = CURRENT_TIMESTAMP 
-			WHERE orden_id = v_orden_id; 
-			
-			RETURN QUERY SELECT FALSE, v_orden_id, 'Fallo en paso 3 (compensado): ' || SQLERRM; 
-	END; 
+    -- ========== PASO 3: Confirmar Débito Origen ==========
+    RAISE NOTICE '--- PASO 3: Confirmar Débito Origen ---';
+    
+    UPDATE saga_ordenes 
+    SET paso_actual = 3 
+    WHERE saga_ordenes.orden_id = v_orden_id; 
+    
+    BEGIN
+        -- Ejecutar débito final 
+        UPDATE cuentas 
+        SET saldo = saldo - p_monto, 
+            ultima_modificacion = CURRENT_TIMESTAMP 
+        WHERE cuentas.id = v_cuenta_origen_id; 
+    
+        -- Registrar éxito 
+        UPDATE saga_pasos 
+        SET estado = 'EJECUTADO', 
+            timestamp_ejecucion = CURRENT_TIMESTAMP, 
+            accion_ejecutada = format('Debitados $%s de cuenta %s', p_monto, p_cuenta_origen) 
+        WHERE saga_pasos.orden_id = v_orden_id AND numero_paso = 3; 
+        
+        INSERT INTO saga_eventos (orden_id, tipo_evento, descripcion) 
+        VALUES (v_orden_id, 'PASO COMPLETADO', 'Paso 3: Débito confirmado'); 
+    
+        v_paso3_exito := TRUE; 
+        RAISE NOTICE 'Paso 3 completado';
+        
+        -- SAGA COMPLETADA 
+        UPDATE saga_ordenes 
+        SET estado = 'COMPLETADA', timestamp_final = CURRENT_TIMESTAMP 
+        WHERE saga_ordenes.orden_id = v_orden_id; 
+    
+        RAISE NOTICE 'SAGA completada exitosamente';
+        
+        RETURN QUERY SELECT TRUE, v_orden_id, 'Transferencia SAGA completada';
+        
+    EXCEPTION 
+        WHEN OTHERS THEN 
+            UPDATE saga_pasos 
+            SET estado = 'FALLIDO', 
+                timestamp_ejecucion = CURRENT_TIMESTAMP, 
+                error_mensaje = SQLERRM 
+            WHERE saga_pasos.orden_id = v_orden_id AND numero_paso = 3;
+            
+            RAISE NOTICE 'Paso 3 falló: %', SQLERRM;
+            
+            -- COMPENSAR PASO 2 y PASO 1 
+            RAISE NOTICE 'Iniciando compensaciones completas...'; 
+            UPDATE saga_ordenes 
+            SET estado = 'COMPENSANDO' 
+            WHERE saga_ordenes.orden_id = v_orden_id; -- 
+    
+            -- Compensación Paso 2: Revertir crédito en destino 
+            BEGIN 
+                PERFORM dblink_connect('conn_destino', 
+                    format('host=localhost dbname=banco_%s user=estudiante password=lab2024', p_db_destino)
+                );
+                
+                PERFORM dblink_exec('conn_destino', 
+                    format('UPDATE cuentas SET saldo = saldo - %s WHERE numero_cuenta = %L', 
+                        p_monto, p_cuenta_destino) 
+                );
+                
+                PERFORM dblink_disconnect('conn_destino'); 
+                
+                UPDATE saga_pasos 
+                SET estado = 'COMPENSADO', 
+                    timestamp_compensacion = CURRENT_TIMESTAMP, 
+                    compensacion_ejecutada = 'Crédito revertido en destino' 
+                WHERE saga_pasos.orden_id = v_orden_id AND numero_paso = 2; 
+            EXCEPTION 
+                WHEN OTHERS THEN 
+                    RAISE NOTICE 'Error en compensación paso 2: %', SQLERRM; 
+    
+            END;
+        
+            -- Compensación Paso 1: Desbloquear fondos 
+            UPDATE cuentas 
+            SET version = version - 1 
+            WHERE cuentas.id = v_cuenta_origen_id; 
+            
+            UPDATE saga_pasos 
+            SET estado = 'COMPENSADO', 
+                timestamp_compensacion = CURRENT_TIMESTAMP, 
+                compensacion_ejecutada = 'Fondos desbloqueados' 
+            WHERE saga_pasos.orden_id = v_orden_id AND numero_paso = 1;
+            
+            -- Finalizar SAGA 
+            UPDATE saga_ordenes 
+            SET estado = 'COMPENSADA', timestamp_final = CURRENT_TIMESTAMP 
+            WHERE saga_ordenes.orden_id = v_orden_id; 
+            
+            RETURN QUERY SELECT FALSE, v_orden_id, 'Fallo en paso 3 (compensado): ' || SQLERRM; 
+    END; 
 END; 
 $$ LANGUAGE plpgsql;
 
