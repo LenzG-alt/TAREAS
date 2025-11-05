@@ -1273,7 +1273,7 @@ SELECT * FROM ejecutar_saga_transferencia(
 COMMIT; 
 
 -- Ver cómo se compensó 
-SELECT * FROM saga_ordenes ORDER BY timestamp_inicio DESC LINIT 1; 
+SELECT * FROM saga_ordenes ORDER BY timestamp_inicio DESC LIMIT 1; 
 SELECT 
 	numero_paso, 
 	nombre_paso, 
@@ -1287,5 +1287,5 @@ ORDER BY numero_paso;
 
 -- Ver eventos de compensación 
 SELECT * FROM saga_eventos 
-WHERE orden_id = (SELECT orden_id FROM saga ordenes ORDER BY timestamp_inicio DESC LIMIT 1) 
+WHERE orden_id = (SELECT orden_id FROM saga_ordenes ORDER BY timestamp_inicio DESC LIMIT 1) 
 ORDER BY timestamp_evento
