@@ -899,7 +899,7 @@ SELECT * FROM transferencia_distribuida_coordinador (
 COMMIT;
 
 -- Verificar resultados 
-SELECT numero_cuenta, titular, saldo FROM cuentas WHERE numero cuenta = 'LIMA-005'; 
+SELECT numero_cuenta, titular, saldo FROM cuentas WHERE numero_cuenta = 'LIMA-005'; 
 
 -- Terminal 2 (Cusco): 
  
