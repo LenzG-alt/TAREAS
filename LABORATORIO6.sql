@@ -924,7 +924,7 @@ CREATE TABLE saga_ordenes (
 	datos JSONB,
 	paso_actual INTEGER DEFAULT 0, 
 	timestamp_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
-	timestamo_final TIMESTAMP 
+	timestamp_final TIMESTAMP 
 );
 
 -- Tabla de pasos SAGA 
