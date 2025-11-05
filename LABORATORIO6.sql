@@ -942,7 +942,7 @@ CREATE TABLE saga_pasos (
 ); 
 
 -- Tabla de eventos SAGA 
-CREATE TABLE saga eventos ( 
+CREATE TABLE saga_eventos ( 
 	id SERIAL PRIMARY KEY, 
 	orden_id VARCHAR(50) REFERENCES saga_ordenes(orden_id), 
 	tipo_evento VARCHAR(50), 
@@ -963,7 +963,7 @@ CREATE OR REPLACE FUNCTION ejecutar_saga_transferencia(
 	exito BOOLEAN, 
 	orden_id VARCHAR, 
 	mensaje TEXT 
-) AS $ 
+) AS $$ 
 DECLARE 
 	v_orden_id VARCHAR; 
 	v_pasol_exito BOOLEAN := FALSE; 
@@ -1219,7 +1219,7 @@ BEGIN
 			RETURN QUERY SELECT FALSE, v_orden_id, 'Fallo en paso 3 (compensado): ' || SQLERRM; 
 	END; 
 END; 
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 
 -- 6.3 Probar SAGA exitosa 
