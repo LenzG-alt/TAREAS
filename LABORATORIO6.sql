@@ -878,7 +878,7 @@ EXCEPTION
 	END; 
 		RETURN QUERY SELECT FALSE, 'Error: ' || SQLERRM, v_transaccion_id;
 END; 
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 -- 5.2 Usar la función coordinadora 
 -- Terminal 1 (Lima): 
