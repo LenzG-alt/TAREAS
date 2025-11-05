@@ -1228,8 +1228,8 @@ $$ LANGUAGE plpgsql;
 BEGIN; 
 
 SELECT * FROM ejecutar_saga_transferencia( 
-	'LIMA-081', 
-	'CUSCO-805', 
+	'LIMA-001', 
+	'CUSCO-005', 
 	300.00, 
 	'cusco' 
 );
